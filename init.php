@@ -15,6 +15,8 @@ class Player {
 	public static function fromStdClass($std) { // Player : convertie stdClass en Player
 		$new = new self($std->name);
 		$new->score = $std->score;
+		$new->level = $std->level;
+		$new->startLevelTime = $std->startLevelTime; 
 		return $new;
 	}	
 }
@@ -47,6 +49,12 @@ class Quiz {
 		$new->response = $std->response;
 		return $new;
 	}
+	public function toPublicStdClass() {
+		$std = new stdClass();
+		$std->responses = $this->responses;
+		$std->images = $this->images;
+		return $std;
+	}
 }
 
 class Game {
@@ -71,21 +79,37 @@ class Game {
 	}
 	public function join($name) { // Ajoute un joueur
 		if (in_array($name, array_keys($this->players)))
-			throw new Exception('Already in game');
+			throw new Exception('already in game');
 		$this->players[$name] = new Player($name);
 	}
 	public function leave($name) { // Retire un joueur
 		if (!in_array($name, array_keys($this->players)))
-			throw new Exception('Not in game');
+			throw new Exception('not in game');
 		unset($this->players[$name]);
 	}
 	public function answer($name, $response) {
+		$success = false;
 		$player = $this->players[$name];
+		if ($player == NULL)
+			throw new Exception('not in game');
+		if ($player->level >= count($this->quizzies))
+			throw new Exception('game ended');
 		if ($this->quizzies[$player->level]->response == $response) {
 			$player->score += max(0, intval(-10*(time()-$player->startLevelTime)+100));
+			$success = true;
+		} else if (!in_array($response, $this->quizzies[$player->level]->responses)) {
+			throw new Exception('unknow response');
 		}
 		$player->level++;
 		$player->startLevelTime = time();
+		return $success;
+	}
+	public function getQuiz($name) {
+		$player = $this->players[$name];
+		if ($player == NULL)
+			throw new Exception('not in game');
+		$quiz = $this->quizzies[$player->level];
+		return $quiz==NULL?NULL:$quiz->toPublicStdClass();
 	}
 }
 
@@ -100,6 +124,18 @@ function getSave() {
 
 function getCurrentGame() {
 	return Game::fromStdClass(getSave());
+}
+
+function saveCurrentGame($game) {
+	return save($game);
+}
+
+function returnError($error) {
+	exit(json_encode(['success'=>false,'error'=>$error]));
+}
+
+function returnSuccess($result) {
+	exit(json_encode(['success'=>true,'result'=>$result]));
 }
 
 ?>
